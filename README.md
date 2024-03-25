@@ -44,7 +44,7 @@ To use `TrustpilotReviewScraper`, follow these setup instructions:
 To start scraping reviews from a specific domain on Trustpilot, run the script as follows:
 
 ```python 
-trustpilot_scraper.py [domain]
+python trustpilot_scraper.py [domain]
 ```
 Replace `[domain]` with the Trustpilot domain you wish to scrape. For example:
 python trustpilot_scraper.py example.com
