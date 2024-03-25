@@ -60,7 +60,11 @@ Contributions are welcome! Please feel free to submit a pull request or open an 
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
+## Disclaimer
 
+This software is provided for educational purposes only. By using this software, you agree that it is solely for personal and educational use. The developer(s) of this project do not endorse or promote the use of this software for any purposes that may violate specific terms of service, legal agreements, or laws.
+It is the responsibility of the user to ensure that their use of this software complies with all relevant terms of service and laws. The user should also be aware of and respect the ethical considerations involved in web scraping, such as respecting the robots.txt file of websites, avoiding excessive requests that can impact service performance, and not accessing or collecting data without permission.
+The developer(s) assume no liability for any misuse of this software or any violations of terms or laws resulting from its use. Users are encouraged to consult a legal professional if they have questions about the legal implications of their intended use of this software.
 
 
 
