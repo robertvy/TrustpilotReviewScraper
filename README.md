@@ -1,6 +1,6 @@
-# TrustpilotReviewScraper
+# Trustpilot Review Scraper
 
-Welcome to **TrustpilotReviewScraper**, a Python-based tool designed for scraping detailed reviews from Trustpilot.com.
+Welcome to the **Trustpilot Review Scraper**, a Python-based tool designed for scraping detailed reviews from Trustpilot.com.
 
 With TrustpilotReviewScraper, you can easily extract reviews for a specific domain on Trustpilot, filtering by star ratings, date ranges, languages, and more. With an easy-to-use command-line interface, you can quickly collect and analyze Trustpilot reviews for various purposes, such as sentiment analysis, customer feedback, and market research.
 
