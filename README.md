@@ -68,6 +68,9 @@ python trustpilot.py [domain]
 
 - `--output`: Choose the output format of the scraped data. Options are 'csv', 'json', or 'both'. The default is 'csv'. Example usage: `--output both`.
 
+## Known Issues
+Currently, the script does not fetch multiple reviews submitted by the same reviewer.
+
 ## Contributing
 Contributions are welcome! Feel free to fork the repository, make changes, and submit pull requests. If you have any suggestions or issues, please open an issue in the GitHub repository.
 
