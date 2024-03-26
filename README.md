@@ -44,7 +44,7 @@ pip install -r requirements.txt
 ## Usage
 To scrape reviews for a specific domain on Trustpilot, use the following command, replacing `[domain]` with the actual domain you wish to scrape:
 ```sh
-python trustpilot_scraper.py [domain]
+python trustpilot.py [domain]
 ```
 ### Required Argument
 - `domain`: The domain to scrape reviews for, without the need for a flag. It is the first positional argument.
