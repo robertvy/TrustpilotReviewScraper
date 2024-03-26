@@ -4,6 +4,7 @@ bs4==0.0.2
 certifi==2024.2.2
 charset-normalizer==3.3.2
 click==8.1.7
+fake-useragent==1.5.1
 idna==3.6
 lxml==5.1.0
 mypy-extensions==1.0.0
