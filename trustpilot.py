@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 
 logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ def generate_url(domain: str, page: int, args) -> str:
     :return: The URL for the given domain and page number with query parameters.
     """
     base_url = f"https://www.trustpilot.com/review/{domain}"
-    params = {"page": page} if page != 1 else {}
+    params = {}
 
     if args.stars:
         for star in args.stars:
@@ -104,6 +104,9 @@ def generate_url(domain: str, page: int, args) -> str:
         params["verified"] = "true"
     if args.replies:
         params["replies"] = "true"
+
+    if page > 1:
+        params["page"] = page
 
     query_string = "&".join([f"{key}={value}" for key, value in params.items()])
     return f"{base_url}?{query_string}" if params else base_url
@@ -251,9 +254,11 @@ def write_reviews_to_csv(reviews: list[dict], filename: str) -> None:
     :param reviews: List of dictionaries containing the review details.
     :param filename: The name of the CSV file to write the reviews to.
     """
-    with open(filename, "w", newline="") as file:
+    with open(filename, "w", newline="", encoding="utf-8-sig") as file:
         writer = csv.DictWriter(
             file,
+            delimiter=";",
+            quoting=csv.QUOTE_MINIMAL,
             fieldnames=[
                 "id",
                 "filtered",
@@ -290,6 +295,17 @@ def write_reviews_to_csv(reviews: list[dict], filename: str) -> None:
         )
         writer.writeheader()
         writer.writerows(reviews)
+        for review in reviews:
+            # Encode text fields as UTF-8 before writing to CSV
+            encoded_review = {
+                key: (
+                    value.encode("utf-8").decode("utf-8-sig")
+                    if isinstance(value, str)
+                    else value
+                )
+                for key, value in review.items()
+            }
+            writer.writerow(encoded_review)
 
 
 def datetime_converter(o: object) -> str:
