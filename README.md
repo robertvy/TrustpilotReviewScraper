@@ -36,7 +36,7 @@ source env/bin/activate
 python -m venv env
 .\env\Scripts\activate
 ```
-4. **Install Required Packages**
+3. **Install Required Packages**
 Install all the necessary packages using pip:
 ```sh
 pip install -r requirements.txt
