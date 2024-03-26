@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 session = requests.Session()
 
 
-def parse_arguments():
+def parse_arguments() -> argparse.Namespace:
     """
     Parses command-line arguments.
     :return: Namespace object with parsed command-line arguments.
