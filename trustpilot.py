@@ -295,17 +295,17 @@ def write_reviews_to_csv(reviews: list[dict], filename: str) -> None:
         )
         writer.writeheader()
         writer.writerows(reviews)
-        for review in reviews:
-            # Encode text fields as UTF-8 before writing to CSV
-            encoded_review = {
-                key: (
-                    value.encode("utf-8").decode("utf-8-sig")
-                    if isinstance(value, str)
-                    else value
-                )
-                for key, value in review.items()
-            }
-            writer.writerow(encoded_review)
+        # for review in reviews:
+        #     # Encode text fields as UTF-8 before writing to CSV
+        #     encoded_review = {
+        #         key: (
+        #             value.encode("utf-8").decode("utf-8-sig")
+        #             if isinstance(value, str)
+        #             else value
+        #         )
+        #         for key, value in review.items()
+        #     }
+        #     writer.writerow(encoded_review)
 
 
 def datetime_converter(o: object) -> str:
