@@ -295,17 +295,6 @@ def write_reviews_to_csv(reviews: list[dict], filename: str) -> None:
         )
         writer.writeheader()
         writer.writerows(reviews)
-        # for review in reviews:
-        #     # Encode text fields as UTF-8 before writing to CSV
-        #     encoded_review = {
-        #         key: (
-        #             value.encode("utf-8").decode("utf-8-sig")
-        #             if isinstance(value, str)
-        #             else value
-        #         )
-        #         for key, value in review.items()
-        #     }
-        #     writer.writerow(encoded_review)
 
 
 def datetime_converter(o: object) -> str:
@@ -350,7 +339,14 @@ def sort_reviews(reviews: list[dict], sort_by: str, sort_order: str) -> list[dic
     """
     reverse = sort_order == "desc"
     if sort_by and any(review.get(sort_by) for review in reviews):
-        return sorted(reviews, key=lambda x: x.get(sort_by, 0), reverse=reverse)
+        if sort_by in ["published_date", "experienced_date", "updated_date"]:
+            return sorted(
+                reviews,
+                key=lambda x: x.get(sort_by) or datetime.min,
+                reverse=reverse,
+            )
+        else:
+            return sorted(reviews, key=lambda x: x.get(sort_by, 0), reverse=reverse)
     return reviews
 
 
