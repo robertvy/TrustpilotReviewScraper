@@ -34,7 +34,7 @@ source env/bin/activate
 - Windows:
 ```cmd
 python -m venv env
-.\\env\\Scripts\\activate 
+.\env\Scripts\activate
 ```
 4. **Install Required Packages**
 Install all the necessary packages using pip:
