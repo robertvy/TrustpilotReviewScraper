@@ -21,7 +21,7 @@ With TrustpilotReviewScraper, you can easily extract reviews for a specific doma
 1. **Clone the Repository**
 Start by cloning the repository to your local machine:
 ```sh
-git clone https://github.com/YOUR_USERNAME/TrustpilotReviewScraper.git
+git clone https://github.com/robertvy/TrustpilotReviewScraper.git
 cd TrustpilotReviewScraper
 ```
 2. **Set Up a Virtual Environment**
