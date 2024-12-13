@@ -19,7 +19,6 @@ capabilities such as sorting, visualization, and exporting data for comprehensiv
 
 ### Prerequisites
 - Tested with Python 3.12.1. Earlier versions may not be compatible.
-- Tested with Python 3.12.1. Earlier versions may not be compatible.
 - Required Dependencies:
     - Python libraries listed in `requirements.txt`:
         - pandas
