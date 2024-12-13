@@ -1,9 +1,13 @@
 # Trustpilot Review Scraper
 
-Welcome to the **Trustpilot Review Scraper**, a Python-based tool designed for scraping detailed reviews from Trustpilot.com.
+Welcome to the **Trustpilot Review Scraper**, a Python-based tool designed for scraping and analyzing detailed reviews
+from Trustpilot.com using the `trustpilot.py` script.
 
-With TrustpilotReviewScraper, you can easily extract reviews for a specific domain on Trustpilot, filtering by star ratings, date ranges, languages, and more. With an easy-to-use command-line interface, you can quickly collect and analyze Trustpilot reviews for various purposes, such as sentiment analysis, customer feedback, and market research.
+With TrustpilotReviewScraper and the `trustpilot.py` script, you can easily extract and analyze reviews for a specific
+domain on Trustpilot, filtering by star ratings, date ranges, languages, and more. This tool supports additional
+capabilities such as sorting, visualization, and exporting data for comprehensive analysis.
 
+## Features
 - 🔍 **Comprehensive Data Collection**: Extract all available data for Trustpilot reviews, including ratings, titles, content, dates, and more.
 - 🌍 **Multi-Language Support**: Fetch reviews in all available languages, allowing for global data analysis.
 - 📄 **Multi-Page Scraping**: Navigates and collects data from multiple pages automatically.
@@ -11,12 +15,20 @@ With TrustpilotReviewScraper, you can easily extract reviews for a specific doma
 - 🚿 **Customizable Filtering**: Filter reviews by star ratings, date ranges, search keywords, languages, and more.
 - 🔀 **Sorting Capabilities**: Sort reviews by various fields, such as rating, date, relevance, etc.
 - 💻 **Easy-to-Use Command-Line Interface**: Simple and intuitive command-line interface for easy data collection.
+- 📊 **Advanced Analytics**: Analyze keyword correlations with ratings and visualize review trends.
+- 🌎 **Geographic Analysis**: Group and visualize reviews by location with detailed charts.
+- 🔄 **Retry Logic**: Built-in retry mechanism for handling slow-loading or dynamic pages.
 
 ## Getting Started
 
 ### Prerequisites
 - Tested with Python 3.12.1. Earlier versions may not be compatible.
-
+- Required Dependencies:
+    - Python libraries listed in `requirements.txt`:
+        - pandas
+        - requests
+        - matplotlib
+        - lxml
 ### Installation
 1. **Clone the Repository**
 Start by cloning the repository to your local machine:
@@ -42,6 +54,8 @@ Install all the necessary packages using pip:
 pip install -r requirements.txt
 ```
 ## Usage
+
+### Running the `trustpilot.py` Script
 To scrape reviews for a specific domain on Trustpilot, use the following command, replacing `[domain]` with the actual domain you wish to scrape:
 ```sh
 python trustpilot.py [domain]
@@ -52,7 +66,7 @@ python trustpilot.py [domain]
 ### Optional Arguments
 - `--stars [N ...]`: Filter reviews by star ratings. Accepts multiple values. For instance, `--stars 4 5` will only fetch reviews rated with 4 or 5 stars.
 
-- `--date`: Filter reviews by date. Options include 'last30days', 'last3months', 'last6months' and 'last12months'. Example usage: `--date last30days`.
+- `--date`: Filter reviews by date. Options include 'last30days', 'last3months', 'last6months'. Example usage: `--date last30days`.
 
 - `--search`: Filter reviews by a search keyword. Example usage: `--search "excellent service"`.
 
@@ -68,6 +82,121 @@ python trustpilot.py [domain]
 
 - `--output`: Choose the output format of the scraped data. Options are 'csv', 'json', or 'both'. The default is 'csv'. Example usage: `--output both`.
 
+- `--analyze`: Perform keyword analysis and correlation with ratings. Example usage: `--analyze`.
+
+- `--visualize`: Generate visualizations of review trends by location. Creates charts in a 'charts' directory. Example usage: `--visualize`.
+
+- `--retry`: Enable retry logic for handling slow-loading or dynamic pages. Example usage: `--retry`.
+
+### Analytics Features
+
+#### Keyword Analysis
+When using the `--analyze` flag, the script will:
+- Calculate correlations between keywords and ratings
+- Generate a statistical significance report
+- Show strength indicators for correlations
+- Output results showing positive and negative associations
+
+Example output:
+```
+Keyword correlation analysis:
+(negative values indicate lower ratings)
+----------------------------------------
+excellent  :  0.412 (+) ***
+terrible   : -0.523 (!) **
+```
+Where:
+- `***`, `**`, `*` indicate significance levels
+- `(!)` indicates strong correlation
+- `(+)` indicates moderate correlation
+
+#### Geographic Visualization
+When using the `--visualize` flag, the script will:
+- Generate charts in a 'charts' directory
+- Create bar charts showing:
+  - Number of reviews by country
+  - Average ratings by country
+- Sort data for better visualization
+- Save as PNG files for easy sharing
+
+### Example Usage Commands and Outputs
+
+Below are examples of how to use the script along with a description of expected outputs:
+
+- Fetch reviews for domain `example.com` with only 5-star ratings, sorted by rating in descending order, and output to JSON:
+
+```sh
+python trustpilot.py example.com --stars 5 --sort-by rating --sort-order desc --output json
+```
+
+Expected output:
+
+- A JSON file `reviews_example.com_[timestamp].json` will be created with content structured as follows:
+
+```json
+[
+   {
+      "id": "123abc...",
+      "filtered": false,
+      "pending": false,
+      "text": "The service was amazing. Highly recommended.",
+      "rating": 5,
+      "title": "Great service!",
+      "likes": 0,
+      "language": "en",
+      "location": "London, United Kingdom",
+      "published_date": "2023-10-01T14:30:00+00:00",
+      "display_name": "John D.",
+      "country_code": "GB",
+      "consumer_verified": true,
+      "review_verified": true,
+      "reply_message": null,
+      // ... additional fields
+   },
+   // ... more reviews
+]
+```
+
+- Fetch reviews for domain `example.com` over the last 30 days with replies, save as both CSV and JSON:
+
+```sh
+python trustpilot.py example.com --date last30days --replies --output both
+```
+
+Expected outputs:
+
+- CSV file `reviews_example.csv` and JSON file `reviews_example.json` containing the requested review data.
+
+## Archived Outputs
+
+When the script processes reviews, output files are stored locally in the working directory based on the selected
+format.
+
+- **CSV File Structure**:
+  Example CSV structure for scraped reviews:
+
+| Title          | Content                    | Rating | Date       | Verified | Language |
+|----------------|----------------------------|--------|------------|----------|----------|
+| Great service! | The service was amazing... | 5      | 2023-10-01 | True     | en       |
+| Average        | It was okay, not great...  | 3      | 2023-09-25 | True     | en       |
+
+- **Keyword Analysis File**:
+  A text analysis report can include the frequency of keywords across reviews, saved in a `.txt` or `.json` file:
+
+```
+Keyword Analysis:
+- "amazing": 15 occurrences
+- "service": 27 occurrences
+- "highly recommended": 10 occurrences
+```
+
+- **Visual Outputs**:
+  The script can generate bar charts for review ratings:
+
+Example chart:
+
+- Bar chart showing distribution of ratings from 1 to 5.
+
 ## Known Issues
 Currently, the script does not fetch multiple reviews submitted by the same reviewer.
 
@@ -78,4 +207,9 @@ Contributions are welcome! Feel free to fork the repository, make changes, and s
 This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Disclaimer
-This tool is for educational and research purposes only. Please use responsibly and ethically.
+
+### Important Notes on Ethical Scraping
+
+- Always check and adhere to Trustpilot's `robots.txt` file.
+- Use this tool responsibly to avoid violating terms of service or impacting website performance.
+- This tool is for educational and research purposes only. Please use responsibly and ethically.
