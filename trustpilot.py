@@ -5,13 +5,17 @@ import logging
 import random
 import sys
 import time
+from collections import defaultdict
 from datetime import datetime
 from urllib.parse import parse_qs, urlparse
 from urllib.robotparser import RobotFileParser
 
+import matplotlib.pyplot as plt
 import requests
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
+from scipy.stats import pearsonr
+from sklearn.feature_extraction.text import CountVectorizer
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -30,6 +34,9 @@ def parse_arguments() -> argparse.Namespace:
         description="Scrape reviews from Trustpilot for a given domain."
     )
     parser.add_argument("domain", help="The domain to scrape reviews for.", type=str)
+    parser.add_argument("--analyze", action="store_true", help="Analyze correlation between ratings and keywords.")
+    parser.add_argument("--visualize", action="store_true", help="Group reviews by location and visualize trends.")
+    parser.add_argument("--retry", action="store_true", help="Enable retry logic for slow-loading or dynamic pages.")
     parser.add_argument(
         "--stars",
         nargs="*",
@@ -110,6 +117,18 @@ def generate_url(domain: str, page: int, args) -> str:
 
     query_string = "&".join([f"{key}={value}" for key, value in params.items()])
     return f"{base_url}?{query_string}" if params else base_url
+
+
+def get_html_with_retry(url: str, retry_enabled: bool) -> BeautifulSoup | None:
+    if retry_enabled:
+        retries = 3
+        for attempt in range(retries):
+            try:
+                return get_html(url)
+            except requests.exceptions.RequestException:
+                logger.warning(f"Retrying ({attempt + 1}/{retries})...")
+                time.sleep(random.randint(1, 3))
+    return get_html(url)
 
 
 def is_allowed_by_robots_txt(url: str, user_agent: str) -> bool:
@@ -350,17 +369,180 @@ def sort_reviews(reviews: list[dict], sort_by: str, sort_order: str) -> list[dic
     return reviews
 
 
+def group_reviews_by_location(reviews: list[dict], reviews_by_location: dict):
+    for review in reviews:
+        location = review.get("location") or "Unknown"
+        if location not in reviews_by_location:
+            reviews_by_location[location] = []
+        reviews_by_location[location].append(review["rating"])
+
+
+def visualize_reviews_by_location(reviews_by_location: dict, output_file: str):
+    import matplotlib.pyplot as plt
+    averages = {loc: sum(ratings) / len(ratings) for loc, ratings in reviews_by_location.items()}
+    locations = list(averages.keys())
+    avg_ratings = list(averages.values())
+    plt.figure(figsize=(10, 6))
+    plt.barh(locations, avg_ratings, color='teal')
+    plt.xlabel("Average Rating")
+    plt.ylabel("Location")
+    plt.title("Average Rating by Location")
+    plt.savefig(output_file)
+    plt.close()
+
+
+def analyze_keywords(review: dict, keyword_analysis: dict):
+    import re
+    text = review.get("text", "")
+    rating = review.get("rating")
+    if not text or not rating:
+        return
+    words = re.findall(r'\w+', text.lower())
+    for word in words:
+        if word not in keyword_analysis:
+            keyword_analysis[word] = {"total_rating": 0, "count": 0}
+        keyword_analysis[word]["total_rating"] += rating
+        keyword_analysis[word]["count"] += 1
+
+
+def save_keyword_analysis(keyword_analysis: dict, output_file: str):
+    with open(output_file, "w", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
+        writer.writerow(["Keyword", "Average Rating", "Count"])
+        for keyword, data in keyword_analysis.items():
+            avg_rating = data["total_rating"] / data["count"] if data["count"] else 0
+            writer.writerow([keyword, avg_rating, data["count"]])
+
+
+def identify_review_platform():
+    """
+    Xác định và kiểm tra nền tảng đánh giá
+    """
+    review_platforms = {
+        'Trustpilot': 'https://www.trustpilot.com',
+        'Google Reviews': 'https://www.google.com/maps/reviews',
+        'Yelp': 'https://www.yelp.com',
+        'Amazon Reviews': 'https://www.amazon.com/reviews'
+    }
+
+    # Thêm logic kiểm tra khả năng truy cập và cấu trúc trang web
+    return review_platforms
+
+
+def handle_pagination_and_lazy_loading(url):
+    """
+    Xử lý các trường hợp phân trang và tải chậm
+    """
+    max_retries = 3
+    retry_delay = 2
+
+    for attempt in range(max_retries):
+        try:
+            # Sử dụng Selenium để xử lý tải động
+            from selenium import webdriver
+            from selenium.webdriver.common.by import By
+            from selenium.webdriver.support.ui import WebDriverWait
+            from selenium.webdriver.support import expected_conditions as EC
+
+            driver = webdriver.Chrome()  # Hoặc trình duyệt khác
+            driver.get(url)
+
+            # Chờ các phần tử tải
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_all_elements_located((By.CLASS_NAME, 'review-element'))
+            )
+
+            # Cuộn trang để tải thêm nội dung
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
+            return driver.page_source
+
+        except Exception as e:
+            logger.error(f"Pagination error (Attempt {attempt + 1}): {e}")
+            time.sleep(retry_delay)
+
+    return None
+
+
+def analyze_rating_keyword_correlation(reviews):
+    """
+    Phân tích tương quan giữa xếp hạng và từ khóa
+    """
+    # Trích xuất văn bản và xếp hạng
+    texts = [review['text'] for review in reviews if review['text']]
+    ratings = [review['rating'] for review in reviews if review['text']]
+
+    # Sử dụng CountVectorizer để trích xuất từ khóa
+    vectorizer = CountVectorizer(stop_words='english', max_features=50)
+    X = vectorizer.fit_transform(texts)
+    keywords = vectorizer.get_feature_names_out()
+
+    # Tính tương quan Pearson
+    correlations = []
+    for i, keyword in enumerate(keywords):
+        keyword_counts = X[:, i].toarray().flatten()
+        correlation, p_value = pearsonr(keyword_counts, ratings)
+        correlations.append((keyword, correlation, p_value))
+
+    # Sắp xếp và in các từ khóa có tương quan mạnh
+    correlations.sort(key=lambda x: abs(x[1]), reverse=True)
+    return correlations[:10]
+
+
+def group_and_visualize_reviews_by_location(reviews):
+    """
+    Nhóm và trực quan hóa đánh giá theo vị trí địa lý
+    """
+    # Nhóm đánh giá theo quốc gia
+    location_groups = defaultdict(list)
+    for review in reviews:
+        country = review.get('country_code', 'Unknown')
+        location_groups[country].append(review)
+
+    # Tạo biểu đồ phân bố đánh giá theo quốc gia
+    countries = list(location_groups.keys())
+    review_counts = [len(reviews) for reviews in location_groups.values()]
+    average_ratings = [
+        sum(review['rating'] for review in reviews) / len(reviews)
+        for reviews in location_groups.values()
+    ]
+
+    plt.figure(figsize=(12, 6))
+    plt.bar(countries, review_counts)
+    plt.title('Số lượng đánh giá theo quốc gia')
+    plt.xlabel('Quốc gia')
+    plt.ylabel('Số lượng đánh giá')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig('reviews_by_country.png')
+
+    # Biểu đồ xếp hạng trung bình
+    plt.figure(figsize=(12, 6))
+    plt.bar(countries, average_ratings)
+    plt.title('Xếp hạng trung bình theo quốc gia')
+    plt.xlabel('Quốc gia')
+    plt.ylabel('Xếp hạng trung bình')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig('average_ratings_by_country.png')
+
+    return location_groups
+
+
 def main():
     args = parse_arguments()
     domain = args.domain
     page = 1
     reviews = []
 
+    reviews_by_location = {}
+    keyword_analysis = {}
+
     # Check if allowed by robots.txt
     ua = UserAgent()
     user_agent = ua.random
     if not is_allowed_by_robots_txt(
-        f"https://www.trustpilot.com/review/{domain}", user_agent
+            f"https://www.trustpilot.com/review/{domain}", user_agent
     ):
         logger.error("Scraping is disallowed by robots.txt.")
         return
@@ -368,7 +550,7 @@ def main():
     while True:
         try:
             url = generate_url(domain, page, args)
-            html = get_html(url)
+            html = get_html_with_retry(url, args.retry)
             if html is None:
                 logger.info(f"Page {page} does not exist. Stopping.")
                 break
@@ -380,6 +562,13 @@ def main():
             reviews.extend(page_reviews)
             page += 1
             time.sleep(random.randint(5, 10) / 10)
+
+            if args.analyze:
+                for review in page_reviews:
+                    analyze_keywords(review, keyword_analysis)
+
+            if args.visualize:
+                group_reviews_by_location(page_reviews, reviews_by_location)
         except requests.exceptions.HTTPError as e:
             logger.error(f"Error fetching page {page}: {e}")
             break
@@ -399,8 +588,20 @@ def main():
             json_filename = f"reviews_{args.domain}_{current_timestamp}.json"
             write_reviews_to_json(reviews, json_filename)
             logger.info(f"Reviews saved to JSON file {json_filename}")
+    if args.analyze and keyword_analysis:
+        save_keyword_analysis(keyword_analysis, f"keyword_analysis_{current_timestamp}.csv")
+        logger.info("Keyword analysis completed and saved.")
+
+    if args.visualize and reviews_by_location:
+        visualize_reviews_by_location(reviews_by_location, f"review_trends_{current_timestamp}.png")
+        logger.info("Review visualization completed and saved.")
     else:
         logger.info("No reviews scraped.")
+    keyword_correlations = analyze_rating_keyword_correlation(reviews)
+    logger.info("Top keyword correlations:")
+    for keyword, corr, p_val in keyword_correlations:
+        logger.info(f"Keyword: {keyword}, Correlation: {corr}, P-value: {p_val}")
+    location_groups = group_and_visualize_reviews_by_location(reviews)
 
 
 if __name__ == "__main__":
