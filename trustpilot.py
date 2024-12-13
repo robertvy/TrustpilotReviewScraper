@@ -2,6 +2,7 @@ import argparse
 import csv
 import json
 import logging
+import os
 import random
 import sys
 import time
@@ -15,6 +16,11 @@ import requests
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 from scipy.stats import pearsonr
+from selenium import webdriver
+from selenium.common.exceptions import TimeoutException, WebDriverException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 from sklearn.feature_extraction.text import CountVectorizer
 
 logging.basicConfig(
@@ -35,7 +41,7 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument("domain", help="The domain to scrape reviews for.", type=str)
     parser.add_argument("--analyze", action="store_true", help="Analyze correlation between ratings and keywords.")
-    parser.add_argument("--visualize", action="store_true", help="Group reviews by location and visualize trends.")
+    parser.add_argument("--visualize", action="store_true", help="Generate charts showing review counts and average ratings by country.")
     parser.add_argument("--retry", action="store_true", help="Enable retry logic for slow-loading or dynamic pages.")
     parser.add_argument(
         "--stars",
@@ -120,6 +126,9 @@ def generate_url(domain: str, page: int, args) -> str:
 
 
 def get_html_with_retry(url: str, retry_enabled: bool) -> BeautifulSoup | None:
+    """
+    Adds retry capability for failed requests
+    """
     if retry_enabled:
         retries = 3
         for attempt in range(retries):
@@ -378,7 +387,9 @@ def group_reviews_by_location(reviews: list[dict], reviews_by_location: dict):
 
 
 def visualize_reviews_by_location(reviews_by_location: dict, output_file: str):
-    import matplotlib.pyplot as plt
+    """
+    Creates visualizations of review trends by location
+    """
     averages = {loc: sum(ratings) / len(ratings) for loc, ratings in reviews_by_location.items()}
     locations = list(averages.keys())
     avg_ratings = list(averages.values())
@@ -414,117 +425,156 @@ def save_keyword_analysis(keyword_analysis: dict, output_file: str):
             writer.writerow([keyword, avg_rating, data["count"]])
 
 
-def identify_review_platform():
+def handle_pagination_and_lazy_loading(url: str, max_retries: int = 3, timeout: int = 10) -> str | None:
     """
-    Xác định và kiểm tra nền tảng đánh giá
-    """
-    review_platforms = {
-        'Trustpilot': 'https://www.trustpilot.com',
-        'Google Reviews': 'https://www.google.com/maps/reviews',
-        'Yelp': 'https://www.yelp.com',
-        'Amazon Reviews': 'https://www.amazon.com/reviews'
-    }
+    Handles dynamic content loading and pagination using Selenium with improved error handling
+    and resource management.
 
-    # Thêm logic kiểm tra khả năng truy cập và cấu trúc trang web
-    return review_platforms
+    Args:
+        url: The URL to scrape
+        max_retries: Maximum number of retry attempts (default: 3)
+        timeout: Maximum time to wait for elements (default: 10 seconds)
 
+    Returns:
+        str: The page source with dynamically loaded content, or None if failed
+    """
+    options = webdriver.ChromeOptions()
+    options.add_argument('--headless')  # Run in headless mode
+    options.add_argument('--disable-gpu')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--window-size=1920,1080')
 
-def handle_pagination_and_lazy_loading(url):
-    """
-    Xử lý các trường hợp phân trang và tải chậm
-    """
-    max_retries = 3
+    driver = None
     retry_delay = 2
 
-    for attempt in range(max_retries):
-        try:
-            # Sử dụng Selenium để xử lý tải động
-            from selenium import webdriver
-            from selenium.webdriver.common.by import By
-            from selenium.webdriver.support.ui import WebDriverWait
-            from selenium.webdriver.support import expected_conditions as EC
+    try:
+        for attempt in range(max_retries):
+            try:
+                if driver:
+                    driver.quit()
 
-            driver = webdriver.Chrome()  # Hoặc trình duyệt khác
-            driver.get(url)
+                driver = webdriver.Chrome(options=options)
+                driver.get(url)
 
-            # Chờ các phần tử tải
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_all_elements_located((By.CLASS_NAME, 'review-element'))
-            )
+                # Wait for reviews container
+                review_container = WebDriverWait(driver, timeout).until(
+                    EC.presence_of_element_located((By.CLASS_NAME, 'review-list'))
+                )
 
-            # Cuộn trang để tải thêm nội dung
-            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                # Scroll to load all reviews
+                last_height = driver.execute_script("return document.body.scrollHeight")
+                while True:
+                    # Scroll down
+                    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
-            return driver.page_source
+                    # Wait for new content to load
+                    time.sleep(2)
 
-        except Exception as e:
-            logger.error(f"Pagination error (Attempt {attempt + 1}): {e}")
-            time.sleep(retry_delay)
+                    # Calculate new scroll height
+                    new_height = driver.execute_script("return document.body.scrollHeight")
 
-    return None
+                    # Break if no more content loaded
+                    if new_height == last_height:
+                        break
+                    last_height = new_height
+
+                # Ensure all reviews are loaded
+                reviews = driver.find_elements(By.CLASS_NAME, 'review-card')
+                logger.info(f"Successfully loaded {len(reviews)} reviews")
+
+                return driver.page_source
+
+            except TimeoutException:
+                logger.warning(f"Timeout while loading content (Attempt {attempt + 1}/{max_retries})")
+                time.sleep(retry_delay)
+            except WebDriverException as e:
+                logger.error(f"WebDriver error (Attempt {attempt + 1}/{max_retries}): {str(e)}")
+                time.sleep(retry_delay)
+            except Exception as e:
+                logger.error(f"Unexpected error (Attempt {attempt + 1}/{max_retries}): {str(e)}")
+                time.sleep(retry_delay)
+
+        logger.error("Failed to load dynamic content after all retries")
+        return None
+
+    finally:
+        if driver:
+            try:
+                driver.quit()
+            except Exception as e:
+                logger.error(f"Error closing WebDriver: {str(e)}")
 
 
 def analyze_rating_keyword_correlation(reviews):
     """
-    Phân tích tương quan giữa xếp hạng và từ khóa
+    Analyzes correlation between ratings and keywords using scikit-learn and scipy
     """
-    # Trích xuất văn bản và xếp hạng
     texts = [review['text'] for review in reviews if review['text']]
     ratings = [review['rating'] for review in reviews if review['text']]
-
-    # Sử dụng CountVectorizer để trích xuất từ khóa
     vectorizer = CountVectorizer(stop_words='english', max_features=50)
     X = vectorizer.fit_transform(texts)
     keywords = vectorizer.get_feature_names_out()
 
-    # Tính tương quan Pearson
     correlations = []
     for i, keyword in enumerate(keywords):
         keyword_counts = X[:, i].toarray().flatten()
         correlation, p_value = pearsonr(keyword_counts, ratings)
         correlations.append((keyword, correlation, p_value))
 
-    # Sắp xếp và in các từ khóa có tương quan mạnh
     correlations.sort(key=lambda x: abs(x[1]), reverse=True)
     return correlations[:10]
 
 
 def group_and_visualize_reviews_by_location(reviews):
     """
-    Nhóm và trực quan hóa đánh giá theo vị trí địa lý
+    Group and visualize reviews by geographic location with sorted charts
     """
-    # Nhóm đánh giá theo quốc gia
+    # Create charts directory if it doesn't exist
+    charts_dir = "charts"
+    if not os.path.exists(charts_dir):
+        os.makedirs(charts_dir)
+
+    # Group reviews by country
     location_groups = defaultdict(list)
     for review in reviews:
         country = review.get('country_code', 'Unknown')
         location_groups[country].append(review)
 
-    # Tạo biểu đồ phân bố đánh giá theo quốc gia
-    countries = list(location_groups.keys())
-    review_counts = [len(reviews) for reviews in location_groups.values()]
-    average_ratings = [
-        sum(review['rating'] for review in reviews) / len(reviews)
-        for reviews in location_groups.values()
-    ]
+    # Prepare and sort data
+    data = []
+    for country, reviews in location_groups.items():
+        review_count = len(reviews)
+        avg_rating = sum(review['rating'] for review in reviews) / review_count
+        data.append((country, review_count, avg_rating))
 
-    plt.figure(figsize=(12, 6))
-    plt.bar(countries, review_counts)
-    plt.title('Số lượng đánh giá theo quốc gia')
-    plt.xlabel('Quốc gia')
-    plt.ylabel('Số lượng đánh giá')
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.savefig('reviews_by_country.png')
+    # Sort by review count descending
+    data.sort(key=lambda x: x[1], reverse=True)
 
-    # Biểu đồ xếp hạng trung bình
+    # Unpack sorted data
+    countries, review_counts, average_ratings = zip(*data)
+
+    # Review count chart
     plt.figure(figsize=(12, 6))
-    plt.bar(countries, average_ratings)
-    plt.title('Xếp hạng trung bình theo quốc gia')
-    plt.xlabel('Quốc gia')
-    plt.ylabel('Xếp hạng trung bình')
-    plt.xticks(rotation=45)
+    plt.bar(countries, review_counts, color='skyblue')
+    plt.title('Number of Reviews by Country')
+    plt.xlabel('Country')
+    plt.ylabel('Number of Reviews')
+    plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
-    plt.savefig('average_ratings_by_country.png')
+    plt.savefig(os.path.join(charts_dir, 'reviews_by_country.png'))
+    plt.close()
+
+    # Average rating chart (maintain same country order as review count)
+    plt.figure(figsize=(12, 6))
+    plt.bar(countries, average_ratings, color='teal')
+    plt.title('Average Rating by Country')
+    plt.xlabel('Country')
+    plt.ylabel('Average Rating')
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.savefig(os.path.join(charts_dir, 'average_ratings_by_country.png'))
+    plt.close()
 
     return location_groups
 
@@ -535,8 +585,9 @@ def main():
     page = 1
     reviews = []
 
-    reviews_by_location = {}
-    keyword_analysis = {}
+    # Only initialize these if needed
+    reviews_by_location = {} if args.visualize else None
+    keyword_analysis = {} if args.analyze else None
 
     # Check if allowed by robots.txt
     ua = UserAgent()
@@ -563,22 +614,23 @@ def main():
             page += 1
             time.sleep(random.randint(5, 10) / 10)
 
+            # Only analyze if flag is set
             if args.analyze:
                 for review in page_reviews:
                     analyze_keywords(review, keyword_analysis)
 
+            # Only visualize if flag is set
             if args.visualize:
                 group_reviews_by_location(page_reviews, reviews_by_location)
         except requests.exceptions.HTTPError as e:
             logger.error(f"Error fetching page {page}: {e}")
             break
 
-    if args.sort_by:
-        logger.debug(f"Sorting reviews by {args.sort_by} in {args.sort_order} order.")
-        reviews = sort_reviews(reviews, args.sort_by, args.sort_order)
-
     if reviews:
         current_timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        logger.info(f"Successfully scraped {len(reviews)} reviews")
+
+        # Save output files based on format selection
         if args.output == "csv" or args.output == "both":
             csv_filename = f"reviews_{args.domain}_{current_timestamp}.csv"
             write_reviews_to_csv(reviews, csv_filename)
@@ -588,20 +640,51 @@ def main():
             json_filename = f"reviews_{args.domain}_{current_timestamp}.json"
             write_reviews_to_json(reviews, json_filename)
             logger.info(f"Reviews saved to JSON file {json_filename}")
-    if args.analyze and keyword_analysis:
-        save_keyword_analysis(keyword_analysis, f"keyword_analysis_{current_timestamp}.csv")
-        logger.info("Keyword analysis completed and saved.")
 
-    if args.visualize and reviews_by_location:
-        visualize_reviews_by_location(reviews_by_location, f"review_trends_{current_timestamp}.png")
-        logger.info("Review visualization completed and saved.")
+        # Only perform analysis if flag is set
+        if args.analyze:
+            keyword_correlations = analyze_rating_keyword_correlation(reviews)
+
+            logger.info("\n\nKeyword correlation analysis:")
+            logger.info("(negative values indicate lower ratings)")
+            logger.info("-" * 40)
+
+            significant_correlations = [
+                (keyword, corr, p_val)
+                for keyword, corr, p_val in keyword_correlations
+                if p_val < 0.05  # Only show statistically significant correlations
+            ]
+
+            if significant_correlations:
+                for keyword, corr, p_val in significant_correlations:
+                    # Determine significance level
+                    if p_val < 1e-10:
+                        sig = "***"  # Extremely significant
+                    elif p_val < 0.001:
+                        sig = "** "  # Highly significant
+                    else:
+                        sig = "*  "  # Significant
+
+                    # Format correlation with strength indicator
+                    if abs(corr) > 0.5:
+                        corr_str = f"{corr:>6.3f} (!)"  # Strong
+                    elif abs(corr) > 0.3:
+                        corr_str = f"{corr:>6.3f} (+)"  # Moderate
+                    else:
+                        corr_str = f"{corr:>6.3f}    "  # Weak
+
+                    logger.info(f"{keyword:10}: {corr_str} {sig}")
+
+                logger.info("\nSignificance: * p<0.05  ** p<0.001  *** p<1e-10")
+                logger.info("Strength: (!) strong  (+) moderate")
+            else:
+                logger.info("No statistically significant correlations found")
+
+        # Only perform visualization if flag is set
+        if args.visualize:
+            location_groups = group_and_visualize_reviews_by_location(reviews)
     else:
         logger.info("No reviews scraped.")
-    keyword_correlations = analyze_rating_keyword_correlation(reviews)
-    logger.info("Top keyword correlations:")
-    for keyword, corr, p_val in keyword_correlations:
-        logger.info(f"Keyword: {keyword}, Correlation: {corr}, P-value: {p_val}")
-    location_groups = group_and_visualize_reviews_by_location(reviews)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ With TrustpilotReviewScraper and the `trustpilot.py` script, you can easily extr
 domain on Trustpilot, filtering by star ratings, date ranges, languages, and more. This tool supports additional
 capabilities such as sorting, visualization, and exporting data for comprehensive analysis.
 
+## Features
 - 🔍 **Comprehensive Data Collection**: Extract all available data for Trustpilot reviews, including ratings, titles, content, dates, and more.
 - 🌍 **Multi-Language Support**: Fetch reviews in all available languages, allowing for global data analysis.
 - 📄 **Multi-Page Scraping**: Navigates and collects data from multiple pages automatically.
@@ -14,6 +15,9 @@ capabilities such as sorting, visualization, and exporting data for comprehensiv
 - 🚿 **Customizable Filtering**: Filter reviews by star ratings, date ranges, search keywords, languages, and more.
 - 🔀 **Sorting Capabilities**: Sort reviews by various fields, such as rating, date, relevance, etc.
 - 💻 **Easy-to-Use Command-Line Interface**: Simple and intuitive command-line interface for easy data collection.
+- 📊 **Advanced Analytics**: Analyze keyword correlations with ratings and visualize review trends.
+- 🌎 **Geographic Analysis**: Group and visualize reviews by location with detailed charts.
+- 🔄 **Retry Logic**: Built-in retry mechanism for handling slow-loading or dynamic pages.
 
 ## Getting Started
 
@@ -62,7 +66,7 @@ python trustpilot.py [domain]
 ### Optional Arguments
 - `--stars [N ...]`: Filter reviews by star ratings. Accepts multiple values. For instance, `--stars 4 5` will only fetch reviews rated with 4 or 5 stars.
 
-- `--date`: Filter reviews by date. Options include 'last30days', 'last3months', 'last6months' and 'last12months'. Example usage: `--date last30days`.
+- `--date`: Filter reviews by date. Options include 'last30days', 'last3months', 'last6months'. Example usage: `--date last30days`.
 
 - `--search`: Filter reviews by a search keyword. Example usage: `--search "excellent service"`.
 
@@ -78,12 +82,48 @@ python trustpilot.py [domain]
 
 - `--output`: Choose the output format of the scraped data. Options are 'csv', 'json', or 'both'. The default is 'csv'. Example usage: `--output both`.
 
+- `--analyze`: Perform keyword analysis and correlation with ratings. Example usage: `--analyze`.
+
+- `--visualize`: Generate visualizations of review trends by location. Creates charts in a 'charts' directory. Example usage: `--visualize`.
+
+- `--retry`: Enable retry logic for handling slow-loading or dynamic pages. Example usage: `--retry`.
+
+### Analytics Features
+
+#### Keyword Analysis
+When using the `--analyze` flag, the script will:
+- Calculate correlations between keywords and ratings
+- Generate a statistical significance report
+- Show strength indicators for correlations
+- Output results showing positive and negative associations
+
+Example output:
+```
+Keyword correlation analysis:
+(negative values indicate lower ratings)
+----------------------------------------
+excellent  :  0.412 (+) ***
+terrible   : -0.523 (!) **
+```
+Where:
+- `***`, `**`, `*` indicate significance levels
+- `(!)` indicates strong correlation
+- `(+)` indicates moderate correlation
+
+#### Geographic Visualization
+When using the `--visualize` flag, the script will:
+- Generate charts in a 'charts' directory
+- Create bar charts showing:
+  - Number of reviews by country
+  - Average ratings by country
+- Sort data for better visualization
+- Save as PNG files for easy sharing
+
 ### Example Usage Commands and Outputs
 
 Below are examples of how to use the script along with a description of expected outputs:
 
-- Fetch reviews for domain `example.com` with only 5-star ratings, sorted by rating in descending order, and output to
-  JSON:
+- Fetch reviews for domain `example.com` with only 5-star ratings, sorted by rating in descending order, and output to JSON:
 
 ```sh
 python trustpilot.py example.com --stars 5 --sort-by rating --sort-order desc --output json
@@ -91,19 +131,29 @@ python trustpilot.py example.com --stars 5 --sort-by rating --sort-order desc --
 
 Expected output:
 
-- A JSON file `reviews_example.json` will be created with content structured as follows:
+- A JSON file `reviews_example.com_[timestamp].json` will be created with content structured as follows:
 
 ```json
 [
    {
-      "title": "Great service!",
-      "content": "The service was amazing. Highly recommended.",
+      "id": "123abc...",
+      "filtered": false,
+      "pending": false,
+      "text": "The service was amazing. Highly recommended.",
       "rating": 5,
-      "date": "2023-10-01",
-      "verified": true,
-      "language": "en"
+      "title": "Great service!",
+      "likes": 0,
+      "language": "en",
+      "location": "London, United Kingdom",
+      "published_date": "2023-10-01T14:30:00+00:00",
+      "display_name": "John D.",
+      "country_code": "GB",
+      "consumer_verified": true,
+      "review_verified": true,
+      "reply_message": null,
+      // ... additional fields
    },
-   ...
+   // ... more reviews
 ]
 ```
 
